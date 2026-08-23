@@ -205,6 +205,10 @@ def _aes_decrypt(key: bytes, blob: bytes) -> bytes:
     return AESGCM(key).decrypt(blob[:12], blob[12:], None)
 
 
+# Serialize on-chain AIVM txs so concurrent /api/analyze jobs don't collide on nonce
+_aivm_tx_lock = threading.Lock()
+
+
 class AIVMClient:
     """
     Runs LLM inference through the Lightchain decentralized worker network.
@@ -226,7 +230,69 @@ class AIVMClient:
         )
         self._jwt     = None
         self._jwt_exp = 0
+        self._local_nonce = None  # track pending nonce while holding _aivm_tx_lock
         print(f"  [AIVM] wallet: {self._account.address}")
+
+    def _next_nonce(self) -> int:
+        """Prefer pending count; keep a local bump while we own the tx lock."""
+        pending = self._w3.eth.get_transaction_count(self._account.address, 'pending')
+        latest = self._w3.eth.get_transaction_count(self._account.address, 'latest')
+        base = max(pending, latest)
+        if self._local_nonce is None or self._local_nonce < base:
+            self._local_nonce = base
+        n = self._local_nonce
+        self._local_nonce = n + 1
+        return n
+
+    def _gas_price(self, bump: float = 1.25) -> int:
+        gp = int(self._w3.eth.gas_price or 0)
+        if gp <= 0:
+            gp = 1_000_000_000  # 1 gwei fallback
+        return max(int(gp * bump), gp + 1)
+
+    def _send_contract_tx(self, built_fn, *, gas: int, value: int = 0, label: str = "tx"):
+        """
+        Sign + send with retries for 'replacement transaction underpriced' / nonce races.
+        Caller should hold _aivm_tx_lock for the whole multi-tx inference when possible.
+        """
+        last_err = None
+        gas_mult = 1.35
+        for attempt in range(5):
+            try:
+                nonce = self._next_nonce()
+                # rewind local nonce if we need to retry same attempt — bump gas instead
+                gas_price = self._gas_price(gas_mult)
+                tx = built_fn.build_transaction({
+                    "from":     self._account.address,
+                    "nonce":    nonce,
+                    "gas":      gas,
+                    "gasPrice": gas_price,
+                    "value":    value,
+                    "chainId":  AIVM_CHAIN_ID,
+                })
+                signed = self._account.sign_transaction(tx)
+                tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
+                print(f"  [AIVM] {label} tx: {tx_hash.hex()} (nonce={nonce} gasPrice={gas_price} attempt={attempt+1})")
+                receipt = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+                if receipt.status != 1:
+                    raise RuntimeError(f"{label} reverted on-chain")
+                return receipt
+            except Exception as e:
+                last_err = e
+                msg = str(e).lower()
+                # allow retry: underpriced, already known, nonce too low
+                retryable = any(s in msg for s in (
+                    'underpriced', 'replacement transaction', 'nonce too low',
+                    'already known', 'alreadyimported', 'already known',
+                ))
+                print(f"  [AIVM] {label} send failed attempt {attempt+1}: {e}")
+                if not retryable or attempt == 4:
+                    break
+                # reset local nonce from chain and bump gas harder
+                self._local_nonce = None
+                gas_mult *= 1.4
+                time.sleep(1.2 + attempt * 0.5)
+        raise RuntimeError(f"AIVM {label} failed after retries: {last_err}")
 
     def _get_jwt(self) -> str:
         from eth_account.messages import encode_defunct
@@ -260,6 +326,12 @@ class AIVMClient:
         }
 
     def run_inference(self, prompt: str, timeout_secs: int = 360) -> str:
+        """Serialize full inference so concurrent web requests don't fight over nonces."""
+        with _aivm_tx_lock:
+            self._local_nonce = None
+            return self._run_inference_locked(prompt, timeout_secs)
+
+    def _run_inference_locked(self, prompt: str, timeout_secs: int = 360) -> str:
         import websocket as _ws
         from web3 import Web3
 
@@ -309,30 +381,19 @@ class AIVMClient:
         params_hash = bytes.fromhex(model_id[2:].zfill(64) if model_id[:2].lower() == "0x" else model_id.zfill(64))
         sig_bytes   = bytes.fromhex(prep["signature"][2:] if prep["signature"][:2].lower() == "0x" else prep["signature"])
 
-        gas_price = self._w3.eth.gas_price
-        nonce_val = self._w3.eth.get_transaction_count(self._account.address)
-
-        tx = self._registry.functions.createSession(
-            params_hash,
-            Web3.to_checksum_address(prep["worker"]),
-            enc_worker,
-            enc_disputer,   # → ephemeralPubKey slot (protocol requirement)
-            sig_bytes,
-            prep["expiry"],
-        ).build_transaction({
-            "from":     self._account.address,
-            "nonce":    nonce_val,
-            "gas":      1_000_000,
-            "gasPrice": gas_price,
-            "value":    0,
-            "chainId":  AIVM_CHAIN_ID,
-        })
-        signed  = self._account.sign_transaction(tx)
-        tx_hash = self._w3.eth.send_raw_transaction(signed.raw_transaction)
-        print(f"  [AIVM] createSession tx: {tx_hash.hex()}")
-        receipt1 = self._w3.eth.wait_for_transaction_receipt(tx_hash, timeout=90)
-        if receipt1.status != 1:
-            raise RuntimeError("createSession reverted on-chain")
+        receipt1 = self._send_contract_tx(
+            self._registry.functions.createSession(
+                params_hash,
+                Web3.to_checksum_address(prep["worker"]),
+                enc_worker,
+                enc_disputer,   # → ephemeralPubKey slot (protocol requirement)
+                sig_bytes,
+                prep["expiry"],
+            ),
+            gas=1_000_000,
+            value=0,
+            label="createSession",
+        )
 
         session_id = None
         for log in receipt1.logs:
@@ -417,24 +478,12 @@ class AIVMClient:
         prompt_hash = bytes.fromhex(_bh[2:].zfill(64) if _bh[:2].lower() == "0x" else _bh.zfill(64))
 
         # ── 10. submitJob (pay 0.02 LCAI) ─────────────────────────────
-        nonce_val2 = self._w3.eth.get_transaction_count(self._account.address)
-        tx2 = self._registry.functions.submitJob(
-            session_id,
-            prompt_hash,
-        ).build_transaction({
-            "from":     self._account.address,
-            "nonce":    nonce_val2,
-            "gas":      500_000,
-            "gasPrice": gas_price,
-            "value":    AIVM_JOB_FEE,
-            "chainId":  AIVM_CHAIN_ID,
-        })
-        signed2  = self._account.sign_transaction(tx2)
-        tx_hash2 = self._w3.eth.send_raw_transaction(signed2.raw_transaction)
-        print(f"  [AIVM] submitJob tx: {tx_hash2.hex()}")
-        receipt2 = self._w3.eth.wait_for_transaction_receipt(tx_hash2, timeout=90)
-        if receipt2.status != 1:
-            raise RuntimeError("submitJob reverted — check LCAI balance")
+        receipt2 = self._send_contract_tx(
+            self._registry.functions.submitJob(session_id, prompt_hash),
+            gas=500_000,
+            value=AIVM_JOB_FEE,
+            label="submitJob",
+        )
 
         job_id = None
         for log in receipt2.logs:
@@ -591,8 +640,10 @@ def get_aivm_client():
     return _aivm_client
 
 
-# Known contracts — accurate context for the model + UI (token ≠ DAO treasury)
+# Known contracts — IDENTITY only for UI logos + prompt context.
+# Never use these entries to force a risk rating. Risk comes only from source analysis.
 KNOWN_CONTRACTS = {
+    # ── Lightchain ──────────────────────────────────────────────────────
     "0x9ca8530ca349c966fe9ef903df17a75b8a778927": {
         "name": "Lightchain AI (LCAI)",
         "symbol": "LCAI",
@@ -600,25 +651,156 @@ KNOWN_CONTRACTS = {
         "kind": "erc20",
         "logo": "/known-logos/lcai-mark.svg",
         "blurb": (
-            "Official Lightchain AI ERC-20 token on Ethereum. "
-            "10 billion fixed supply. Owner controls like enableTrading/setWhitelist are common at token launch "
-            "and are NOT the same as the Lightchain protocol Treasury. "
-            "Protocol treasury and spending are controlled by the Lightchain DAO Governor + 48h Timelock on Lightchain mainnet "
-            "(Treasury 0x786eDe8C42Ca54E54c9dCECa9b30052CF4743389), not by a single person sweeping this token contract."
+            "Official Lightchain AI ERC-20 token contract on Ethereum (identity). "
+            "Not the Lightchain protocol Treasury. Protocol spending is governed separately "
+            "via DAO Governor + Timelock on Lightchain mainnet "
+            "(Treasury 0x786eDe8C42Ca54E54c9dCECa9b30052CF4743389)."
         ),
-        "risk_hint": "LOW",
     },
     "0x786ede8c42ca54e54c9dceca9b30052cf4743389": {
         "name": "Lightchain Treasury",
         "symbol": None,
         "chain": "lightchain",
         "kind": "treasury",
-        "logo": "/known-logos/lcai-mark.svg",
+        "logo": "/known-logos/treasury-mark.svg",
         "blurb": (
-            "On-chain Treasury for Lightchain AI mainnet. Controlled by DAO governance "
-            "(Governor + 48-hour Timelock). Not a personal owner wallet."
+            "On-chain Treasury for Lightchain AI mainnet (identity). "
+            "Intended to be controlled by DAO Governor + 48-hour Timelock — not a personal wallet."
         ),
-        "risk_hint": "LOW",
+    },
+    # ── Ethereum blue-chips (identity only) ─────────────────────────────
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/usdc-mark.svg",
+        "blurb": (
+            "Circle USD Coin (USDC) on Ethereum mainnet (identity). "
+            "Widely used fiat-backed stablecoin; often implemented behind a proxy/upgrade pattern. "
+            "Identify from code; do not invent Circle legal claims beyond what source shows."
+        ),
+    },
+    "0xdac17f958d2ee523a2206206994597c13d831ec7": {
+        "name": "Tether USD",
+        "symbol": "USDT",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/usdt-mark.svg",
+        "blurb": (
+            "Tether USD (USDT) on Ethereum mainnet (identity). "
+            "Legacy ERC-20-style stablecoin with issuer admin surfaces common in its design era."
+        ),
+    },
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
+        "name": "Wrapped Ether",
+        "symbol": "WETH",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/weth-mark.svg",
+        "blurb": (
+            "Wrapped Ether (WETH) on Ethereum mainnet (identity). "
+            "Canonical deposit/withdraw wrapper: ETH in → WETH out, and reverse. Not a governance token."
+        ),
+    },
+    "0x6b175474e89094c44da98b954eedeac495271d0f": {
+        "name": "Dai Stablecoin",
+        "symbol": "DAI",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/dai-mark.svg",
+        "blurb": (
+            "MakerDAO Dai (DAI) on Ethereum mainnet (identity). "
+            "Decentralized stablecoin token; protocol risk is broader than this ERC-20 surface alone."
+        ),
+    },
+    "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984": {
+        "name": "Uniswap",
+        "symbol": "UNI",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/uni-mark.svg",
+        "blurb": (
+            "Uniswap governance token (UNI) on Ethereum mainnet (identity). "
+            "ERC-20 used for Uniswap governance — not the swap router itself."
+        ),
+    },
+    "0x7a250d5630b4cf539739df2c5dacb4c659f2488d": {
+        "name": "Uniswap V2 Router",
+        "symbol": None,
+        "chain": "eth",
+        "kind": "router",
+        "logo": "/known-logos/router-mark.svg",
+        "blurb": (
+            "Uniswap V2 Router02 on Ethereum (identity). "
+            "Infrastructure users approve to swap/add liquidity. Not a meme token; explain router semantics accurately."
+        ),
+    },
+    "0xe592427a0aece92de3edee1f18e0157c05861564": {
+        "name": "Uniswap V3 SwapRouter",
+        "symbol": None,
+        "chain": "eth",
+        "kind": "router",
+        "logo": "/known-logos/router-mark.svg",
+        "blurb": (
+            "Uniswap V3 SwapRouter on Ethereum (identity). "
+            "Exact-input/output swap infrastructure — not a holdable retail token contract."
+        ),
+    },
+    "0x1f98431c8ad98523631ae4a59f267346ea31f984": {
+        "name": "Uniswap V3 Factory",
+        "symbol": None,
+        "chain": "eth",
+        "kind": "factory",
+        "logo": "/known-logos/factory-mark.svg",
+        "blurb": (
+            "Uniswap V3 Factory on Ethereum (identity). "
+            "Creates and tracks V3 pools; core DEX infrastructure, not a user-held token."
+        ),
+    },
+    "0xca11bde05977b3631167028862be2a173976ca11": {
+        "name": "Multicall3",
+        "symbol": None,
+        "chain": "eth",
+        "kind": "infra",
+        "logo": "/known-logos/multicall-mark.svg",
+        "blurb": (
+            "Multicall3 (canonical multi-chain helper) (identity). "
+            "Batches eth_calls / aggregate3 for wallets and dapps. Not a token and not a vault of user funds."
+        ),
+    },
+    "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": {
+        "name": "Wrapped BTC",
+        "symbol": "WBTC",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/wbtc-mark.svg",
+        "blurb": (
+            "Wrapped Bitcoin (WBTC) on Ethereum mainnet (identity). "
+            "ERC-20 representation of BTC custodied off-chain; not a DEX router and not a protocol treasury."
+        ),
+    },
+    "0x514910771af9ca656af840dff83e8264ecf986ca": {
+        "name": "ChainLink Token",
+        "symbol": "LINK",
+        "chain": "eth",
+        "kind": "erc20",
+        "logo": "/known-logos/link-mark.svg",
+        "blurb": (
+            "Chainlink LINK token on Ethereum mainnet (identity). "
+            "ERC-20 with transferAndCall helper — not a DEX router and not a treasury."
+        ),
+    },
+    "0xfb15f90298e4ccd7106e76ffb5e520315cc42b0b": {
+        "name": "Lightchain AIVM JobRegistry",
+        "symbol": None,
+        "chain": "lightchain",
+        "kind": "infra",
+        "logo": "/known-logos/aivm-mark.svg",
+        "blurb": (
+            "Lightchain AIVM JobRegistry proxy on native mainnet (identity). "
+            "Infrastructure for paid decentralized inference jobs — not a retail token."
+        ),
     },
 }
 
@@ -678,8 +860,59 @@ def run_inference_aivm_or_ollama(prompt: str, timeout: int = 300) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# HTTP SERVER
+# HTTP SERVER + abuse guards (open-endpoints audit 2026-08-22)
 # ════════════════════════════════════════════════════════════════════════
+from datetime import datetime, timezone as _tz
+_CORS_ORIGINS = [o.strip() for o in os.environ.get(
+    "CORS_ORIGINS",
+    "https://smartcontractexplainer.xyz,https://keiko-dev-lcai.github.io,http://localhost:8080"
+).split(",") if o.strip()]
+_CHAT_RATE_PER_MIN = int(os.environ.get("CHAT_RATE_PER_MIN", "5"))
+_CHAT_RATE_PER_DAY = int(os.environ.get("CHAT_RATE_PER_DAY", "30"))
+_DAILY_LCAI_CAP = float(os.environ.get("DAILY_LCAI_CAP", "50"))
+_LCAI_PER_JOB = float(os.environ.get("LCAI_PER_JOB", "0.02"))
+_MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT_JOBS", "8"))
+_rate_lock = threading.Lock(); _rate_hits = {}
+_spend_lock = threading.Lock(); _spend_day = ""; _spend_jobs = 0
+_active = 0; _active_lock = threading.Lock()
+
+def _handler_ip(h):
+    xff = (h.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return xff or (h.client_address[0] if h.client_address else "unknown")
+
+def _cors_for(h):
+    origin = (h.headers.get("Origin") or "").strip()
+    if origin in _CORS_ORIGINS: return origin
+    return _CORS_ORIGINS[0] if _CORS_ORIGINS else "https://smartcontractexplainer.xyz"
+
+def _gate_ai(h):
+    global _spend_day, _spend_jobs, _active
+    ip = _handler_ip(h); now = time.time(); day = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+    with _rate_lock:
+        rec = _rate_hits.get(ip)
+        if not rec or rec.get("day") != day:
+            rec = {"day": day, "hits": []}; _rate_hits[ip] = rec
+        hits = [t for t in rec["hits"] if now - t < 86400]
+        if len([t for t in hits if now - t < 60]) >= _CHAT_RATE_PER_MIN:
+            return False, 429, "Too many requests — wait a minute and try again."
+        if len(hits) >= _CHAT_RATE_PER_DAY:
+            return False, 429, "Daily limit reached — try again tomorrow."
+        hits.append(now); rec["hits"] = hits
+    with _active_lock:
+        if _active >= _MAX_CONCURRENT:
+            return False, 503, "AI is busy right now — give it a moment and try again."
+        _active += 1
+    with _spend_lock:
+        if _spend_day != day: _spend_day = day; _spend_jobs = 0
+        if _spend_jobs * _LCAI_PER_JOB >= _DAILY_LCAI_CAP:
+            with _active_lock: _active = max(0, _active - 1)
+            return False, 503, "AI is at capacity for today — please try again tomorrow."
+        _spend_jobs += 1
+    return True, 200, ""
+
+def _ungate_ai():
+    global _active
+    with _active_lock: _active = max(0, _active - 1)
 
 class Handler(BaseHTTPRequestHandler):
 
@@ -687,16 +920,18 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', _cors_for(self))
+        self.send_header('Vary', 'Origin')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', _cors_for(self))
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Vary', 'Origin')
         self.end_headers()
 
     def do_POST(self):
@@ -712,96 +947,26 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
-
         # ── API: compare two contracts ────────────────────────────────────
         if parsed.path == '/api/compare':
-            import json as _json
-            body_raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-            body     = _json.loads(body_raw) if body_raw else {}
-            addr_a   = body.get('address_a', '').strip()
-            addr_b   = body.get('address_b', '').strip()
-            chain_a  = body.get('chain_a', 'eth').strip()
-            chain_b  = body.get('chain_b', 'eth').strip()
-
-            if not addr_a or not addr_b:
-                self.send_json(400, {'error': 'Both addresses required'})
+            ok, code, err = _gate_ai(self)
+            if not ok:
+                self.rfile.read(int(self.headers.get('Content-Length', 0) or 0))
+                self.send_json(code, {'error': err})
                 return
-
-            def _fetch_src(address, chain):
-                chain_id = CHAIN_IDS.get(chain)
-                if chain_id is None:
-                    url = (f"{LIGHTCHAIN_API}?module=contract&action=getsourcecode"
-                           f"&address={address}")
-                else:
-                    url = (f"{ETHERSCAN_V2}?chainid={chain_id}"
-                           f"&module=contract&action=getsourcecode"
-                           f"&address={address}&apikey={ETHERSCAN_KEY}")
-                req = urllib.request.Request(url,
-                    headers={"User-Agent": "SmartContractExplainer/1.0",
-                             "Accept": "application/json"})
-                with urllib.request.urlopen(req, timeout=15) as r:
-                    data = _json.loads(r.read())
-                if data.get('status') != '1':
-                    raise ValueError(f"Could not fetch {address}: {data.get('message','')}")
-                result = data['result'][0]
-                src  = result.get('SourceCode', '') or ''
-                name = result.get('ContractName', address[:8])
-                return src[:6000], name   # truncate to fit in prompt
-
             try:
-                src_a, name_a = _fetch_src(addr_a, chain_a)
-                src_b, name_b = _fetch_src(addr_b, chain_b)
-            except Exception as e:
-                self.send_json(502, {'error': str(e)})
-                return
-
-            compare_prompt = f"""You are a smart contract security and functionality expert.
-
-Contract A: {name_a} ({addr_a[:10]}… on {chain_a})
-```solidity
-{src_a}
-```
-
-Contract B: {name_b} ({addr_b[:10]}… on {chain_b})
-```solidity
-{src_b}
-```
-
-Compare these two contracts. Structure your response as:
-
-**Purpose**
-* Contract A: one sentence on what it does.
-* Contract B: one sentence on what it does.
-
-**Similarities**
-Key things they have in common.
-
-**Differences**
-Key functional and structural differences.
-
-**Risk Assessment**
-Which is riskier and why. Rate each LOW/MEDIUM/HIGH risk.
-
-**Recommendation**
-Which would you trust more for a DeFi interaction, and why?
-
-Be concise, neutral, and accurate. Token owner controls ≠ protocol DAO treasury unless the code clearly is the treasury."""
-
-            try:
-                text = run_inference_aivm(compare_prompt, timeout=180)
-                self.send_json(200, {
-                    'response': text,
-                    'done': True,
-                    'name_a': name_a,
-                    'name_b': name_b,
-                    'engine': 'aivm',
-                })
-            except Exception as e:
-                self.send_json(502, {'error': str(e)})
+                self._handle_compare()
+            finally:
+                _ungate_ai()
             return
 
         # ── API: async analyze (returns job_id immediately; poll /api/job/:id) ──
         if parsed.path == '/api/analyze/start':
+            ok, code, err = _gate_ai(self)
+            if not ok:
+                self.rfile.read(int(self.headers.get('Content-Length', 0) or 0))
+                self.send_json(code, {'error': err})
+                return
             length = int(self.headers.get('Content-Length', 0))
             body   = self.rfile.read(length)
             try:
@@ -839,36 +1004,131 @@ Be concise, neutral, and accurate. Token owner controls ≠ protocol DAO treasur
                         _jobs[jid]['status'] = 'error'
                         _jobs[jid]['error']  = str(exc)
 
-            threading.Thread(target=_run_job, daemon=True).start()
+            def _run_job_wrapped(jid=job_id, p=prompt):
+                try:
+                    _run_job(jid, p)
+                finally:
+                    _ungate_ai()
+            threading.Thread(target=_run_job_wrapped, daemon=True).start()
             self.send_json(200, {'mode': 'async', 'job_id': job_id, 'engine': 'aivm'})
             return
 
         # ── API: analyze a single contract via AI ─────────────────────────
         if parsed.path == '/api/analyze':
+            ok, code, err = _gate_ai(self)
+            if not ok:
+                self.rfile.read(int(self.headers.get('Content-Length', 0) or 0))
+                self.send_json(code, {'error': err})
+                return
             length = int(self.headers.get('Content-Length', 0))
             body   = self.rfile.read(length)
-
             try:
                 import json as _json
                 req_data = _json.loads(body)
                 prompt   = req_data.get('prompt', '')
-
                 text = run_inference_aivm(prompt, timeout=180)
-                result = _json.dumps({'response': text, 'done': True, 'engine': 'aivm'}).encode()
-
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Content-Length', str(len(result)))
-                self.end_headers()
-                self.wfile.write(result)
-
+                self.send_json(200, {'response': text, 'done': True, 'engine': 'aivm'})
             except Exception as e:
                 self.send_json(502, {'error': str(e)})
+            finally:
+                _ungate_ai()
             return
 
         self.send_response(404)
         self.end_headers()
+
+    def _handle_compare(self):
+        import json as _json
+        body_raw = self.rfile.read(int(self.headers.get('Content-Length', 0)))
+        body     = _json.loads(body_raw) if body_raw else {}
+        addr_a   = body.get('address_a', '').strip()
+        addr_b   = body.get('address_b', '').strip()
+        chain_a  = body.get('chain_a', 'eth').strip()
+        chain_b  = body.get('chain_b', 'eth').strip()
+
+        if not addr_a or not addr_b:
+            self.send_json(400, {'error': 'Both addresses required'})
+            return
+
+        def _fetch_src(address, chain):
+            chain_id = CHAIN_IDS.get(chain)
+            if chain_id is None:
+                url = (f"{LIGHTCHAIN_API}?module=contract&action=getsourcecode"
+                       f"&address={address}")
+            else:
+                url = (f"{ETHERSCAN_V2}?chainid={chain_id}"
+                       f"&module=contract&action=getsourcecode"
+                       f"&address={address}&apikey={ETHERSCAN_KEY}")
+            req = urllib.request.Request(url,
+                headers={"User-Agent": "SmartContractExplainer/1.0",
+                         "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = _json.loads(r.read())
+            if data.get('status') != '1':
+                raise ValueError(f"Could not fetch {address}: {data.get('message','')}")
+            result = data['result'][0]
+            src  = result.get('SourceCode', '') or ''
+            name = result.get('ContractName', address[:8])
+            return src[:6000], name   # truncate to fit in prompt
+
+        try:
+            src_a, name_a = _fetch_src(addr_a, chain_a)
+            src_b, name_b = _fetch_src(addr_b, chain_b)
+        except Exception as e:
+            self.send_json(502, {'error': str(e)})
+            return
+
+        compare_prompt = f"""You are a smart contract teacher comparing two contracts for everyday users.
+Be neutral, specific to THIS source, and never invent functions.
+
+Silently check both for: proxy/upgradeability, mint, pause/blacklist, fees/tax, owner/admin roles,
+external calls, and whether each is a token vs router/factory/infra.
+
+Contract A: {name_a} ({addr_a[:10]}… on {chain_a})
+```solidity
+{src_a}
+```
+
+Contract B: {name_b} ({addr_b[:10]}… on {chain_b})
+```solidity
+{src_b}
+```
+
+Compare these two contracts. Structure your response as:
+
+**Purpose**
+* Contract A: one sentence on what it does.
+* Contract B: one sentence on what it does.
+
+**Similarities**
+Key things they have in common (from code).
+
+**Differences**
+Key functional and structural differences (from code).
+
+**Risk Assessment**
+Rate each LOW/MEDIUM/HIGH from the source only (famous name does not force LOW).
+Which is riskier for a typical user interaction and why — cite concrete privileges or patterns.
+
+**Recommendation**
+Which is safer for a careful DeFi interaction, and why. No FUD adjectives.
+
+Token owner controls ≠ protocol DAO treasury unless the code clearly is the treasury.
+Infrastructure (routers/factories/multicall) is different from holdable tokens — say so clearly."""
+
+        try:
+            text = run_inference_aivm(compare_prompt, timeout=180)
+            self.send_json(200, {
+                'response': text,
+                'done': True,
+                'name_a': name_a,
+                'name_b': name_b,
+                'engine': 'aivm',
+            })
+        except Exception as e:
+            self.send_json(502, {'error': str(e)})
+        return
+
 
     def do_GET(self):
         import re as _re
@@ -1188,7 +1448,14 @@ Be concise, neutral, and accurate. Token owner controls ≠ protocol DAO treasur
             self.send_response(200)
             self.send_header('Content-Type', ctype)
             self.send_header('Content-Length', str(len(body)))
-            self.send_header('Cache-Control', 'public, max-age=300')
+            # HTML/JS app shell must not stick stale (identity bugs after deploys)
+            if ext in ('.html', '.htm', '.js'):
+                self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+                self.send_header('Pragma', 'no-cache')
+            elif ext == '.svg':
+                self.send_header('Cache-Control', 'public, max-age=3600')
+            else:
+                self.send_header('Cache-Control', 'public, max-age=300')
             self.end_headers()
             self.wfile.write(body)
         else:
