@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Treasury">
+  <defs>
+    <linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#0b1020"/>
+  <path d="M48 100h160l-12 92H60z" fill="url(#tg)" opacity="0.9"/>
+  <path d="M40 88h176l-16-28H56z" fill="#a78bfa"/>
+  <rect x="118" y="128" width="20" height="40" rx="4" fill="#0b1020"/>
+</svg>

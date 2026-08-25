@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Uniswap">
+  <rect width="256" height="256" rx="56" fill="#FF007A"/>
+  <circle cx="98" cy="110" r="34" fill="#fff" opacity="0.95"/>
+  <circle cx="162" cy="146" r="40" fill="#fff" opacity="0.85"/>
+  <path d="M118 96c18-28 52-36 78-18" fill="none" stroke="#FF007A" stroke-width="10" stroke-linecap="round"/>
+</svg>

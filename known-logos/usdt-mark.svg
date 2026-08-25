@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Tether USD">
+  <rect width="256" height="256" rx="56" fill="#26A17B"/>
+  <path d="M72 72h112v28H144v18c34 4 58 18 58 42 0 28-30 46-74 46s-74-18-74-46c0-24 24-38 58-42V100H72V72zm56 92c-28 0-46-10-46-24s18-24 46-24 46 10 46 24-18 24-46 24z" fill="#fff"/>
+</svg>

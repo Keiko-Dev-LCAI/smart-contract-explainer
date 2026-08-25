@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "description": "Golden fixtures for SCE type-aware rubric + phrase bans. Risk is type+signals, never brand.",
+  "fixtures": [
+    {
+      "id": "lc-treasury-governed",
+      "label": "Lightchain Treasury (governed)",
+      "address": "0x786eDe8C42Ca54E54c9dCECa9b30052CF4743389",
+      "chain": "lightchain",
+      "signals": {
+        "contract_type": "treasury",
+        "upgradeable": true,
+        "proxy_kind": "transparent",
+        "owner_kind": "timelock",
+        "mint_unlimited": false,
+        "pause": false,
+        "blacklist": false,
+        "transfer_fee": false,
+        "honeypot_signals": false,
+        "holds_user_deposits": false,
+        "native_treasury_spend": true,
+        "is_router_or_infra": false,
+        "suggested_risk": "MEDIUM"
+      },
+      "expect_risk": "low",
+      "expect_type": "treasury",
+      "must_not_phrases": ["approve this router", "users must approve", "scam token"]
+    },
+    {
+      "id": "weth-wrapper",
+      "label": "WETH wrapper",
+      "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "chain": "eth",
+      "signals": {
+        "contract_type": "wrapper",
+        "upgradeable": false,
+        "owner_kind": "none",
+        "mint_unlimited": false,
+        "pause": false,
+        "blacklist": false,
+        "transfer_fee": false,
+        "honeypot_signals": false,
+        "holds_user_deposits": false,
+        "native_treasury_spend": false,
+        "is_router_or_infra": false
+      },
+      "expect_risk": "low",
+      "expect_type": "wrapper"
+    },
+    {
+      "id": "uni-v2-router",
+      "label": "Uniswap V2 Router",
+      "address": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "chain": "eth",
+      "signals": {
+        "contract_type": "router",
+        "upgradeable": false,
+        "owner_kind": "none",
+        "mint_unlimited": false,
+        "honeypot_signals": false,
+        "holds_user_deposits": false,
+        "is_router_or_infra": true
+      },
+      "expect_risk": "low",
+      "expect_type": "router",
+      "must_not_phrases": ["meme token"]
+    },
+    {
+      "id": "multicall3",
+      "label": "Multicall3",
+      "address": "0xcA11bde05977b3631167028862bE2a173976CA11",
+      "chain": "eth",
+      "signals": {
+        "contract_type": "infra",
+        "upgradeable": false,
+        "owner_kind": "none",
+        "honeypot_signals": false,
+        "holds_user_deposits": false,
+        "is_router_or_infra": true
+      },
+      "expect_risk": "low",
+      "expect_type": "infra"
+    },
+    {
+      "id": "clean-oz-erc20",
+      "label": "Clean OZ ERC20 (PEPE-like)",
+      "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+      "chain": "eth",
+      "signals": {
+        "contract_type": "token",
+        "upgradeable": false,
+        "owner_kind": "none",
+        "mint_unlimited": false,
+        "pause": false,
+        "blacklist": false,
+        "transfer_fee": false,
+        "honeypot_signals": false,
+        "holds_user_deposits": false
+      },
+      "expect_risk": "low",
+      "expect_type": "token"
+    },
+    {
+      "id": "eoa-mint-token",
+      "label": "Unlimited mint + EOA",
+      "signals": {
+        "contract_type": "token",
+        "upgradeable": false,
+        "owner_kind": "eoa",
+        "mint_unlimited": true,
+        "honeypot_signals": false,
+        "holds_user_deposits": false
+      },
+      "expect_risk": "high",
+      "expect_type": "token"
+    },
+    {
+      "id": "honeypot-token",
+      "label": "Honeypot signals",
+      "signals": {
+        "contract_type": "token",
+        "owner_kind": "eoa",
+        "honeypot_signals": true,
+        "transfer_fee": true
+      },
+      "expect_risk": "high",
+      "expect_type": "token"
+    },
+    {
+      "id": "upgradeable-eoa-token",
+      "label": "Upgradeable token EOA admin",
+      "signals": {
+        "contract_type": "token",
+        "upgradeable": true,
+        "owner_kind": "eoa",
+        "mint_unlimited": false,
+        "honeypot_signals": false
+      },
+      "expect_risk": "medium",
+      "expect_type": "token"
+    },
+    {
+      "id": "usdc-proxy-governed-ish",
+      "label": "USDC-like proxy (upgradeable, non-EOA unknown)",
+      "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "chain": "eth",
+      "signals": {
+        "contract_type": "token",
+        "upgradeable": true,
+        "proxy_kind": "transparent",
+        "owner_kind": "unknown",
+        "mint_unlimited": false,
+        "honeypot_signals": false,
+        "holds_user_deposits": false
+      },
+      "expect_risk": "low",
+      "expect_type": "token",
+      "notes": "Without EOA admin confirmed, do not force MEDIUM solely for upgradeable blue-chip proxy"
+    },
+    {
+      "id": "treasury-eoa",
+      "label": "Treasury with EOA owner",
+      "signals": {
+        "contract_type": "treasury",
+        "upgradeable": true,
+        "owner_kind": "eoa",
+        "native_treasury_spend": true,
+        "holds_user_deposits": false,
+        "honeypot_signals": false
+      },
+      "expect_risk": "medium",
+      "expect_type": "treasury"
+    },
+    {
+      "id": "vault-eoa-upgradeable",
+      "label": "Vault deposits + EOA upgrade",
+      "signals": {
+        "contract_type": "vault",
+        "upgradeable": true,
+        "owner_kind": "eoa",
+        "holds_user_deposits": true,
+        "honeypot_signals": false
+      },
+      "expect_risk": "high",
+      "expect_type": "vault"
+    },
+    {
+      "id": "pause-blacklist-token",
+      "label": "Pause + blacklist token",
+      "signals": {
+        "contract_type": "token",
+        "owner_kind": "eoa",
+        "pause": true,
+        "blacklist": true,
+        "honeypot_signals": false
+      },
+      "expect_risk": "medium",
+      "expect_type": "token"
+    }
+  ]
+}

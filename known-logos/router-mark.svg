@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="DEX Router">
+  <rect width="256" height="256" rx="56" fill="#111827"/>
+  <defs>
+    <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <path d="M56 96h100l-20-24 16-14 48 52-48 52-16-14 20-24H56z" fill="url(#rg)"/>
+  <path d="M200 160H100l20 24-16 14-48-52 48-52 16 14-20 24h100z" fill="none" stroke="url(#rg)" stroke-width="10" opacity="0.55"/>
+</svg>

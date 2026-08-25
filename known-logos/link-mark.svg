@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Chainlink">
+  <rect width="256" height="256" rx="56" fill="#2A5ADA"/>
+  <path d="M128 36 L196 76 V176 L128 216 L60 176 V76 Z" fill="none" stroke="#fff" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M128 88 L160 106 V150 L128 168 L96 150 V106 Z" fill="#fff"/>
+</svg>

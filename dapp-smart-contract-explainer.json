@@ -1,0 +1,9 @@
+{
+  "id": "dapp-smart-contract-explainer",
+  "name": "Smart Contract Explainer",
+  "description": "Paste any smart contract address — auto-detects the chain and explains exactly what the contract does in plain English. Supports Ethereum, BNB, Polygon, Arbitrum, and Lightchain AI.",
+  "tags": ["AI", "TOOLS", "CONTRACTS"],
+  "iconSrc": "/images/dapp-item-logo/smart-contract-explainer.png",
+  "imageSrc": "/images/dapp-item-thumb/smart-contract-explainer.png",
+  "externalUrl": "https://smartcontractexplainer.xyz"
+}

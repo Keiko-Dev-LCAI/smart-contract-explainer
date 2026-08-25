@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Wrapped Bitcoin">
+  <rect width="256" height="256" rx="56" fill="#F7931A"/>
+  <circle cx="128" cy="128" r="88" fill="none" stroke="#fff" stroke-width="8"/>
+  <text x="128" y="152" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="110" fill="#fff">₿</text>
+</svg>

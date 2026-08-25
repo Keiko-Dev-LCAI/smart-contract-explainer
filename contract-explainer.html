@@ -136,6 +136,47 @@
     }
     .btn-secondary:hover { background: #2d3748; }
 
+    /* OrcaGuard cross-link — safety tool, not a second Explain */
+    .orcaguard-card {
+      width: 100%; max-width: 1400px;
+      margin: 0 0 20px 0;
+      padding: 20px 22px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(6,182,212,0.08));
+      border: 1px solid rgba(16,185,129,0.35);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+      text-align: center;
+    }
+    .orcaguard-card .og-kicker {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #6ee7b7; margin-bottom: 10px;
+    }
+    .btn-orcaguard {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; max-width: 520px;
+      padding: 16px 28px;
+      border-radius: 12px;
+      border: 1px solid rgba(52,211,153,0.55);
+      background: linear-gradient(135deg, #059669, #0d9488);
+      color: #fff;
+      font-size: 1.05rem; font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 4px 20px rgba(16,185,129,0.25);
+      transition: transform 0.15s, opacity 0.15s, box-shadow 0.15s;
+    }
+    .btn-orcaguard:hover {
+      opacity: 0.95; transform: translateY(-1px);
+      box-shadow: 0 8px 28px rgba(16,185,129,0.35);
+      color: #fff;
+    }
+    .orcaguard-card .og-sub {
+      margin-top: 12px;
+      font-size: 0.82rem; line-height: 1.45;
+      color: #94a3b8;
+    }
+    .orcaguard-card .og-sub strong { color: #a7f3d0; font-weight: 600; }
+
     /* Status / error messages */
     .msg {
       border-radius: 8px; padding: 10px 14px; font-size: 0.86rem;
@@ -372,30 +413,58 @@
     }
 
   
-    /* ── FLUX Illustration ──────────────────────────────────── */
+    /* ── Known contract brand card (official mark only; no AI art) ── */
     #illustrationSection {
-      margin-top: 22px;
       display: none;
-      text-align: center;
+      margin: 0 0 16px 0;
     }
     #illustrationSection.visible { display: block; }
-    .illus-heading {
-      font-size: 0.82rem; font-weight: 700;
-      letter-spacing: 0.07em; text-transform: uppercase;
-      color: var(--text-dim); margin-bottom: 12px;
+    .known-brand-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(120,80,255,0.14), rgba(6,182,212,0.08));
+      border: 1px solid rgba(120,80,255,0.3);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.22);
     }
     #illustrationImg {
-      max-width: 240px; width: 100%;
+      width: 56px; height: 56px; flex-shrink: 0;
       border-radius: 14px;
-      box-shadow: 0 0 24px rgba(139,92,246,0.35);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
       display: none;
+      object-fit: cover;
+      background: #0b1020;
     }
-    #illustrationImg.loaded { display: inline-block; }
+    #illustrationImg.loaded { display: block; }
+    .known-brand-meta { flex: 1; min-width: 0; }
+    .known-brand-kicker {
+      font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #a78bfa; margin-bottom: 4px;
+    }
+    .known-brand-name {
+      font-weight: 700; color: #f1f5f9; font-size: 0.98rem;
+      line-height: 1.25;
+    }
+    .known-brand-sub {
+      color: #94a3b8; font-size: 0.78rem; margin-top: 2px;
+      font-family: ui-monospace, 'Fira Code', monospace;
+    }
+    .known-brand-blurb {
+      color: #a8b2cc; font-size: 0.78rem; margin-top: 8px;
+      line-height: 1.45;
+    }
     .illus-spinner {
       font-size: 0.82rem; color: var(--text-dim);
       display: none; margin-bottom: 8px;
     }
     .illus-spinner.visible { display: block; }
+
+    .result-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    #txSection { margin-top: 18px; display: none; }
+    #txSection.visible { display: block; }
 
   
     /* ── Share button ───────────────────────────────────────── */
@@ -670,7 +739,7 @@
   <!-- Tab: Paste Code -->
   <div class="tab-panel" id="tab-paste">
     <label class="field-label">Solidity Contract Code</label>
-    <textarea id="contractInput" oninput="isExample=false" placeholder="// Paste your Solidity contract here...
+    <textarea id="contractInput" oninput="isExample=false; if(typeof showKnownBrand==='function') showKnownBrand(null);" placeholder="// Paste your Solidity contract here...
 pragma solidity ^0.8.0;
 
 contract MyToken {
@@ -752,42 +821,55 @@ contract MyToken {
   </div>
 </div>
 
+<!-- OrcaGuard — separate safety tool (not a second explainer) -->
+<div class="orcaguard-card" id="orcaguardCard">
+  <div class="og-kicker">Also from KeikoDev</div>
+  <button type="button" class="btn-orcaguard" id="orcaguardBtn" onclick="openOrcaGuard()">
+    🛡 Open OrcaGuard — security scan
+  </button>
+  <p class="og-sub">
+    Honeypot, tax, approvals &amp; wallet checks in plain English.<br>
+    <strong>SCE explains the code</strong> · <strong>OrcaGuard checks safety</strong>
+  </p>
+</div>
+
 <!-- Result Card -->
 <div class="card" id="resultCard">
   <div class="result-header">
     <span class="result-title">Analysis</span>
-    <div style="display:flex;gap:10px;align-items:center;">
+    <div class="result-actions">
       <span class="risk-badge" id="riskBadge" style="display:none"></span>
       <button id="copyBtn" onclick="copyAnalysis()" style="display:none;background:#1e293b;color:#94a3b8;border:1px solid #2d3748;border-radius:8px;padding:5px 14px;font-size:0.85rem;cursor:pointer;font-weight:600;transition:all 0.2s;">📋 Copy</button>
       <button id="shareBtn" onclick="shareCard()">📤 Share</button>
-
-      <!-- Official mark only for known tokens (no AI-generated art) -->
-      <div id="illustrationSection">
-        <div class="illus-heading">Official mark</div>
-        <div class="illus-spinner" id="illusSpinner" style="display:none"></div>
-        <img id="illustrationImg" alt="Official token mark" />
-      </div>
-
-
-      
-      <!-- ── Compare Panel ─────────────────────────────────── -->
-      
-
-      <!-- ── Transaction Feed ───────────────────────────────── -->
-      <div id="txSection">
-        <div class="tx-heading">
-          <span class="tx-dot"></span>
-          Recent Transactions
-          <span id="txCount" style="font-weight:400;color:var(--text-dim);text-transform:none;letter-spacing:0;font-size:0.78rem;"></span>
-        </div>
-        <div class="tx-list" id="txList"></div>
-      </div>
-
-      <!-- ── Transaction Feed ───────────────────────────────── -->
-      
+      <button type="button" id="orcaguardMiniBtn" onclick="openOrcaGuard()" title="Security scan in OrcaGuard"
+        style="display:none;background:rgba(16,185,129,0.15);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4);border-radius:8px;padding:5px 12px;font-size:0.82rem;cursor:pointer;font-weight:600;">🛡 OrcaGuard</button>
     </div>
   </div>
+
+  <!-- Official mark only for known contracts (no AI-generated art) -->
+  <div id="illustrationSection">
+    <div class="illus-spinner" id="illusSpinner" style="display:none"></div>
+    <div class="known-brand-card">
+      <img id="illustrationImg" alt="Contract mark" />
+      <div class="known-brand-meta">
+        <div class="known-brand-kicker">Recognized contract</div>
+        <div class="known-brand-name" id="knownBrandName">—</div>
+        <div class="known-brand-sub" id="knownBrandSub"></div>
+        <div class="known-brand-blurb" id="knownBrandBlurb"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="output"></div>
+
+  <div id="txSection">
+    <div class="tx-heading">
+      <span class="tx-dot"></span>
+      Recent Transactions
+      <span id="txCount" style="font-weight:400;color:var(--text-dim);text-transform:none;letter-spacing:0;font-size:0.78rem;"></span>
+    </div>
+    <div class="tx-list" id="txList"></div>
+  </div>
 </div>
 
 <div class="footer">Powered by Lightchain AI · smartcontractexplainer.xyz</div>
@@ -852,7 +934,9 @@ const ACCESS_CONTRACT_ADDRESS = '0xd5E2d7b5F55dd0B21D5Bf9319801FC38489A476d';
 const LIGHTCHAIN_CHAIN_ID_HEX = '0x23F0';   // 9200 decimal = Lightchain AI Mainnet
 const LIGHTCHAIN_RPC_URL      = 'https://rpc.mainnet.lightchain.ai';
 const LIGHTCHAIN_EXPLORER     = 'https://mainnet.lightscan.app';
-const FREE_ANALYSES_LIMIT = 5;
+// Free-forever testing mode (flagship QA). Flip to false to restore paid gate / free limit.
+const FREE_FOREVER = false;
+const FREE_ANALYSES_LIMIT = FREE_FOREVER ? 999999 : 5;
 const TARGET_USD_PRICE = 1;   // $1 USD for 30 days — LCAI amount calculated live
 const OWNER_ADDRESS = '0xa3a653a8cba0710ff57ac34e2278c603b4259fd3'; // owner override
 const ACCESS_CONTRACT_ABI = [
@@ -953,7 +1037,21 @@ let currentTab = 'address';
 let fetchedCode = '';
 let lastFetchedAddress = '';
 let lastFetchedChain    = '';
+let lastKnownContract = null;  // declared early — used by fetch/switchTab before analyze helpers
 let fullText = '';
+
+const ORCAGUARD_URL = 'https://orcaguard.win';
+
+/** Open OrcaGuard; pass current address when we have a valid 0x… */
+function openOrcaGuard() {
+  let url = ORCAGUARD_URL;
+  const fromInput = (document.getElementById('addressInput') || {}).value || '';
+  const addr = String(fromInput || lastFetchedAddress || '').trim();
+  if (/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+    url += '/?address=' + encodeURIComponent(addr);
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 function switchTab(tab) {
   currentTab = tab;
@@ -967,6 +1065,13 @@ function switchTab(tab) {
   btn.textContent = '⚡ Explain This Contract';
   const counterEl = document.getElementById('freeCounter');
   if (counterEl) counterEl.style.display = '';
+  // Paste mode must never inherit address lookup identity (brand / known blurb)
+  if (tab === 'paste') {
+    showKnownBrand(null); // hide card; keep lastKnown only for if user returns to address tab
+  } else if (tab === 'address') {
+    if (lastKnownContract) showKnownBrand(lastKnownContract);
+    else showKnownBrand(null);
+  }
 }
 
 
@@ -1049,6 +1154,31 @@ function loadExample() {
   document.getElementById('contractInput').value = EXAMPLE_CONTRACT;
   fetchedCode = '';
   isExample = true;
+  // Example paste is not a known on-chain address
+  lastKnownContract = null;
+  lastFetchedAddress = '';
+  lastFetchedChain = '';
+  showKnownBrand(null);
+}
+
+/** True if text looks like Solidity source — not JS/HTML/Python app code. */
+function looksLikeSolidity(code) {
+  if (!code) return false;
+  const c = code.trim();
+  if (/^#!/.test(c)) return false;
+  // Hard reject common non-Solidity app code
+  if (/<(!DOCTYPE|html|script)\b/i.test(c)) return false;
+  if (/\b(document\.|window\.|process\.env|require\s*\(|import\s+sys|from\s+web3)\b/.test(c)) return false;
+  if (/\b(var|let|const)\s+\w+\s*=/.test(c) && !/\bpragma\s+solidity\b/i.test(c) && !/\bcontract\s+[A-Za-z_]\w*\s*\{/.test(c)) {
+    return false;
+  }
+  // Must have real Solidity structure (not the English word "contract" alone)
+  if (/\bpragma\s+solidity\b/i.test(c)) return true;
+  if (/\b(abstract\s+)?contract\s+[A-Za-z_]\w*\s*(is\s+[^{]+)?\{/.test(c)) return true;
+  if (/\b(interface|library)\s+[A-Za-z_]\w*\s*\{/.test(c)) return true;
+  // Solidity-style function visibility (not plain JS function foo() {)
+  if (/\bfunction\s+[A-Za-z_]\w*\s*\([^)]*\)\s*(external|public|internal|private)\b/.test(c)) return true;
+  return false;
 }
 
 function clearAll() {
@@ -1073,6 +1203,10 @@ function clearAll() {
   document.getElementById('txSection').classList.remove('visible');
   document.getElementById('txSection').classList.remove('visible');
   fetchedCode = '';
+  lastFetchedAddress = '';
+  lastFetchedChain = '';
+  lastKnownContract = null;
+  showKnownBrand(null);
 }
 
 function detectRisk(text) {
@@ -1084,16 +1218,242 @@ function detectRisk(text) {
   return null;
 }
 
-/** Prefer known-contract hint when the model is overly harsh on standard tokens */
-function resolveRisk(text, known) {
-  const detected = detectRisk(text);
-  if (known && String(known.risk_hint || '').toUpperCase() === 'LOW' && detected === 'medium') {
-    return 'low';
-  }
-  return detected;
+// ── A–C: Type taxonomy + structured extract + type-aware risk rubric ──
+const SCE_VALID_TYPES = new Set([
+  'token','wrapper','router','factory','treasury','vault','staking','proxy','infra','access','unknown'
+]);
+
+function sceNormType(t) {
+  t = String(t || 'unknown').trim().toLowerCase();
+  const aliases = {
+    erc20:'token','erc-20':'token',stablecoin:'token',weth:'wrapper',wrap:'wrapper',
+    dex:'router',swap:'router',multicall:'infra',utility:'infra',payment:'access',
+    timelock:'access',governor:'access'
+  };
+  t = aliases[t] || t;
+  return SCE_VALID_TYPES.has(t) ? t : 'unknown';
 }
 
-let lastKnownContract = null;
+function sceNormOwner(o) {
+  o = String(o || 'unknown').trim().toLowerCase();
+  if (['eoa','timelock','governor','multisig','none','unknown'].includes(o)) return o;
+  if (o.includes('timelock')) return 'timelock';
+  if (o.includes('governor') || o.includes('dao')) return 'governor';
+  if (o.includes('multi') || o.includes('safe')) return 'multisig';
+  if (['owner','admin','ownable'].includes(o)) return 'eoa';
+  return 'unknown';
+}
+
+const SCE_RANK = { low: 0, medium: 1, high: 2 };
+const SCE_GOVERNED = new Set(['timelock','governor','multisig']);
+
+/** Type-aware risk from structured signals. Brand/known list never used. */
+function scoreRiskFromSignals(raw) {
+  const s = raw || {};
+  const ctype = sceNormType(s.contract_type);
+  const owner = sceNormOwner(s.owner_kind);
+  const upgradeable = !!s.upgradeable;
+  const mintUnlimited = !!s.mint_unlimited;
+  const pause = !!s.pause;
+  const blacklist = !!s.blacklist;
+  const transferFee = !!s.transfer_fee;
+  const honeypot = !!s.honeypot_signals;
+  const holdsUser = !!s.holds_user_deposits;
+  const nativeTreasury = !!s.native_treasury_spend;
+  const isInfra = !!s.is_router_or_infra || ['router','factory','infra'].includes(ctype);
+
+  let risk = 'low';
+  const reasons = [];
+  function bump(level, reason) {
+    if (SCE_RANK[level] > SCE_RANK[risk]) risk = level;
+    reasons.push(reason);
+  }
+
+  if (honeypot) bump('high', 'Honeypot / trap-sell signals in source');
+  if (mintUnlimited && owner === 'eoa' && (ctype === 'token' || ctype === 'unknown')) {
+    bump('high', 'Unlimited mint controlled by EOA-style owner');
+  }
+
+  if (ctype === 'treasury' || nativeTreasury) {
+    if (SCE_GOVERNED.has(owner)) {
+      risk = 'low';
+      reasons.push('Treasury with Timelock/Governor/multisig owner — spend is governance-controlled');
+      if (upgradeable) reasons.push('Upgradeable under same governed owner (ops risk, not a user honeypot)');
+    } else if (owner === 'eoa') {
+      bump('medium', 'Treasury spend controlled by EOA-style owner');
+    } else {
+      bump('medium', 'Treasury with unclear owner kind');
+    }
+  } else if (['router','factory','infra'].includes(ctype) || isInfra) {
+    risk = 'low';
+    reasons.push((ctype || 'infra') + ' infrastructure — not a holdable scam token');
+    if (honeypot) bump('high', 'Trap signals even on infra-shaped code');
+  } else if (ctype === 'wrapper') {
+    risk = 'low';
+    reasons.push('Deposit/withdraw wrapper pattern');
+  } else if (ctype === 'access') {
+    risk = 'low';
+    reasons.push('Access/payment/utility contract');
+  } else if (ctype === 'vault' || holdsUser) {
+    if (SCE_GOVERNED.has(owner)) bump('medium', 'Holds user deposits with governed admin (protocol risk)');
+    else bump('medium', 'Holds user deposits with privileged withdraw path');
+    if (owner === 'eoa' && upgradeable) bump('high', 'User deposits + upgradeable + EOA admin');
+  } else if (ctype === 'staking') {
+    if (owner === 'eoa' && (mintUnlimited || upgradeable)) bump('medium', 'Staking with strong admin controls');
+    else reasons.push('Staking/rewards surface');
+  } else {
+    // token / proxy / unknown
+    if (pause && blacklist) bump('medium', 'Pause + blacklist/freeze on transfers');
+    if (transferFee) bump('medium', 'Transfer fee / tax mechanics');
+    if (upgradeable && owner === 'eoa') bump('medium', 'Upgradeable with EOA-style admin');
+    if (mintUnlimited && SCE_GOVERNED.has(owner)) bump('medium', 'Unlimited mint under governance (inflation risk)');
+    if (!reasons.length && risk === 'low') reasons.push('Standard surface without clear theft mechanics');
+  }
+
+  if (upgradeable && owner === 'eoa' &&
+      !['treasury','router','factory','infra','wrapper'].includes(ctype) &&
+      SCE_RANK[risk] < SCE_RANK.medium) {
+    bump('medium', 'Upgradeable with centralized admin');
+  }
+
+  let modelSug = null;
+  if (s.suggested_risk) {
+    const u = String(s.suggested_risk).toUpperCase().replace(' RISK','');
+    if (u === 'LOW' || u === 'MEDIUM' || u === 'HIGH') modelSug = u.toLowerCase();
+  }
+  return {
+    risk, reasons, contract_type: ctype, owner_kind: owner,
+    model_suggested: modelSug,
+    model_agreed: modelSug ? modelSug === risk : null
+  };
+}
+
+const SCE_BANNED = {
+  treasury: [
+    /approve this router/i,
+    /approve.{0,40}before (withdraw|claim)/i,
+    /users must approve/i,
+    /scam token/i,
+    /pull user (lp|liquidity)/i,
+    /honeypot/i,
+    /run away/i
+  ],
+  router: [/meme token/i, /token holders can be drained/i],
+  factory: [/meme token/i],
+  infra: [/meme token/i, /rug pull/i],
+  wrapper: [/approve this router/i, /governance token/i]
+};
+
+function findBannedPhrases(text, contractType) {
+  const hits = [];
+  const list = SCE_BANNED[sceNormType(contractType)] || [];
+  for (const re of list) {
+    if (re.test(text || '')) hits.push(re.source);
+  }
+  for (const re of [/\brun away\b/i, /\bscary\b/i, /\bdangerous\b/i]) {
+    if (re.test(text || '')) hits.push(re.source);
+  }
+  return hits;
+}
+
+/** Parse leading/embedded ```json structured block from model output. */
+function parseStructuredSignals(text) {
+  if (!text) return null;
+  // Prefer fenced json after STRUCTURED marker
+  let m = text.match(/##\s*STRUCTURED[\s\S]*?```(?:json)?\s*([\s\S]*?)```/i);
+  if (!m) m = text.match(/```json\s*([\s\S]*?)```/i);
+  if (!m) {
+    // bare JSON object with contract_type
+    m = text.match(/(\{[\s\S]*?"contract_type"[\s\S]*?\})\s*(?:\n|$)/);
+  }
+  if (!m) return null;
+  try {
+    const obj = JSON.parse(m[1].trim());
+    if (!obj || typeof obj !== 'object') return null;
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Strip STRUCTURED block + leaked prompt meta from user-facing report. */
+function stripStructuredBlock(text) {
+  if (!text) return '';
+  let t = text.replace(/##\s*STRUCTURED[\s\S]*?```(?:json)?[\s\S]*?```/i, '');
+  t = t.replace(/```json\s*\{[\s\S]*?"contract_type"[\s\S]*?\}\s*```/i, '');
+  t = t.replace(/##\s*REPORT\s*\n+/i, '');
+  // Keep from first real Summary heading onward (drop "I'll guide you / STEP 1" preamble)
+  const sumIdx = t.search(/##\s*📋?\s*Summary/i);
+  if (sumIdx > 0) t = t.slice(sumIdx);
+  t = t.replace(/STEP\s*[1-4]\s*[—\-:].*$/gim, '');
+  t = t.replace(/I('ll| will) guide you through[^\n]*\n?/gi, '');
+  t = t.replace(/Here('s| is) the output in the required form:[^\n]*\n?/gi, '');
+  t = t.replace(/Since we('re| are) focusing on IDENTITY vs RISK[^\n]*\n?/gi, '');
+  return t.trim();
+}
+
+function applyRiskLine(report, risk, reason) {
+  const riskU = String(risk).toUpperCase();
+  let line = '## 🛡️ Risk Rating\n' + riskU + ' RISK';
+  if (reason) line += '\n' + reason;
+  line += '\n\n_Risk band set by type-aware checklist (structured signals), not by brand recognition._';
+  const pat = /##\s*🛡[^\n]*Risk Rating\s*\n[\s\S]*?(?=\n---|\n##\s|$)/i;
+  if (pat.test(report || '')) {
+    return (report || '').replace(pat, line + '\n\n').trim() + '\n';
+  }
+  const body = (report || '').trim();
+  return body + '\n\n' + line + '\n\n---\n*AI-assisted analysis, not financial advice. Not a substitute for a professional audit.*\n';
+}
+
+function sanitizeReportPhrases(report, contractType) {
+  let t = report || '';
+  const ctype = sceNormType(contractType);
+  if (ctype === 'treasury') {
+    t = t.replace(/Users must approve this router[^.]*\./gi, '');
+    t = t.replace(/Users must approve[^.]*before (withdrawals?|claims?)[^.]*\./gi, '');
+    t = t.replace(/pull user (LP|liquidity)[^.]*\./gi, '');
+  }
+  if (ctype === 'router' || ctype === 'factory' || ctype === 'infra') {
+    t = t.replace(/This is a meme token[^.]*\./gi, '');
+  }
+  // Drop empty bullet lines
+  t = t.replace(/^\s*[\*\-]\s*$/gm, '');
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Full post-process: parse signals → score risk → clean phrases → force risk line.
+ * Known identity is ignored for risk.
+ */
+function processAnalysisOutput(rawText, _known) {
+  const signals = parseStructuredSignals(rawText);
+  let report = stripStructuredBlock(rawText);
+  let scored = null;
+  if (signals) {
+    scored = scoreRiskFromSignals(signals);
+    report = sanitizeReportPhrases(report, scored.contract_type);
+    const banned = findBannedPhrases(report, scored.contract_type);
+    if (banned.length) {
+      report = sanitizeReportPhrases(report, scored.contract_type);
+    }
+    const reason = (scored.reasons && scored.reasons[0]) || null;
+    // Prefer rubric over free-form model risk
+    report = applyRiskLine(report, scored.risk, reason);
+    return { report, risk: scored.risk, signals, scored, banned };
+  }
+  // Fallback: model text only
+  const risk = detectRisk(report) || 'medium';
+  return { report, risk, signals: null, scored: null, banned: [] };
+}
+
+function resolveRisk(text, known) {
+  // Prefer processed path — callers should use processAnalysisOutput
+  const p = processAnalysisOutput(text, known);
+  return p.risk;
+}
+
+// lastKnownContract declared near top with other analysis state
+let lastAnalysisMeta = null;
 
 async function fetchKnownMeta(address) {
   try {
@@ -1106,26 +1466,44 @@ async function fetchKnownMeta(address) {
   }
 }
 
+function clearKnownIdentity() {
+  lastKnownContract = null;
+  // Do not wipe lastFetchedAddress here — address tab may still need it.
+  showKnownBrand(null);
+}
+
 function showKnownBrand(known) {
   const section = document.getElementById('illustrationSection');
   const spinner = document.getElementById('illusSpinner');
   const img = document.getElementById('illustrationImg');
-  const heading = section ? section.querySelector('.illus-heading') : null;
+  const nameEl = document.getElementById('knownBrandName');
+  const subEl = document.getElementById('knownBrandSub');
+  const blurbEl = document.getElementById('knownBrandBlurb');
   if (!section || !img) return;
   if (!known || !known.logo) {
     section.classList.remove('visible');
+    section.style.display = 'none';
     img.classList.remove('loaded');
     img.removeAttribute('src');
+    img.removeAttribute('alt');
+    if (nameEl) nameEl.textContent = '';
+    if (subEl) subEl.textContent = '';
+    if (blurbEl) blurbEl.textContent = '';
     return;
   }
+  section.style.display = '';
   section.classList.add('visible');
   if (spinner) spinner.classList.remove('visible');
-  if (heading) heading.textContent = 'Official mark';
-  img.alt = (known.name || 'Token') + ' logo';
+  const sym = known.symbol ? ` · ${known.symbol}` : '';
+  const kind = known.kind ? String(known.kind).toUpperCase() : 'CONTRACT';
+  const chain = known.chain ? String(known.chain) : '';
+  if (nameEl) nameEl.textContent = (known.name || 'Known contract') + sym;
+  if (subEl) subEl.textContent = [kind, chain].filter(Boolean).join(' · ') + ' · identity only';
+  if (blurbEl) blurbEl.textContent = known.blurb || 'Recognized address — risk still comes from code signals, not this logo.';
+  img.alt = (known.name || 'Contract') + ' mark';
   img.src = known.logo;
   img.onload = () => img.classList.add('loaded');
   img.onerror = () => {
-    section.classList.remove('visible');
     img.classList.remove('loaded');
   };
 }
@@ -1145,46 +1523,125 @@ function formatOutput(text) {
 }
 
 const SYSTEM_PROMPT = `You are a friendly, accurate Smart Contract Explainer for everyday users.
-Sound like a clear teacher — NOT a fear-mongering auditor. Be specific to THIS contract's code.
+Sound like a clear teacher — not a fear-mongering auditor and not a hype machine.
+Every claim must come from the source code in this message. If code is truncated or incomplete, say so.
 
-Critical accuracy rules:
-- Token contract "owner" functions (enableTrading, setWhitelist, transferOwnership) are NORMAL for many launched ERC-20s. Describe them factually. Do NOT imply one person can empty a whole blockchain treasury unless the code IS the treasury.
-- Protocol treasuries controlled by DAO Governor + Timelock are NOT the same as an ERC-20 owner. Never conflate them.
-- Prefer LOW RISK for standard ERC-20s with ordinary owner controls and fixed supply.
-- MEDIUM RISK only for unusual mint-to-drain, hidden fees, or real backdoors in THIS code.
-- HIGH RISK only for clear rug / fund-theft mechanics.
-- Do not invent functions that are not in the source.
-- Stay neutral; no FUD adjectives ("scary", "dangerous", "run away") unless HIGH RISK is justified.
+IDENTITY vs RISK (critical):
+- Any VERIFIED CONTEXT about who a contract is (name/project) is IDENTIFICATION only.
+- Never use brand fame to set risk. Risk comes from code signals + contract TYPE.
+- Never invent functions, roles, or supply numbers that are not in the source.
 
-Use this exact structure:
+════════════════════════════════════════
+STEP 1 — CLASSIFY (pick exactly one contract_type)
+════════════════════════════════════════
+token | wrapper | router | factory | treasury | vault | staking | proxy | infra | access | unknown
+
+Definitions:
+- treasury: protocol pot of funds; owner may transfer native/tokens; NOT a retail vault users deposit into for yield
+- wrapper: deposit/withdraw wrap (e.g. WETH-like)
+- router / factory / infra: DEX or multicall infrastructure (users approve routers; they are not "meme tokens")
+- vault: holds USER deposits that users can withdraw as principal
+- token: holdable ERC-20 style asset
+- access: payment/access/gating utility
+- proxy: thin proxy shell only (note implementation may be separate)
+
+════════════════════════════════════════
+STEP 2 — STRUCTURED SIGNALS (required)
+════════════════════════════════════════
+Output FIRST, exactly in this form (valid JSON, no comments):
+
+## STRUCTURED
+\`\`\`json
+{
+  "contract_type": "treasury",
+  "upgradeable": true,
+  "proxy_kind": "transparent|uups|beacon|none|unknown",
+  "owner_kind": "eoa|timelock|governor|multisig|none|unknown",
+  "mint_unlimited": false,
+  "pause": false,
+  "blacklist": false,
+  "transfer_fee": false,
+  "honeypot_signals": false,
+  "holds_user_deposits": false,
+  "native_treasury_spend": true,
+  "is_router_or_infra": false,
+  "risk_signals": ["short facts from code only"],
+  "suggested_risk": "LOW"
+}
+\`\`\`
+
+Field rules:
+- owner_kind=timelock if Ownable owner is TimelockController / delayed admin
+- owner_kind=governor if Governor/DAO clearly owns mutating rights
+- native_treasury_spend=true if contract receives native coin and owner can transfer it
+- holds_user_deposits=true ONLY if ordinary users deposit principal they expect to withdraw (not protocol fee treasury)
+- is_router_or_infra=true for routers, factories, multicall, pure helpers
+- suggested_risk is your draft only; type rules below matter more
+
+════════════════════════════════════════
+STEP 3 — TYPE-AWARE RISK RUBRIC (follow strictly)
+════════════════════════════════════════
+HIGH:
+- honeypot_signals true
+- unlimited mint to EOA-style owner on a token
+
+MEDIUM:
+- token with pause+blacklist, transfer tax, or upgradeable+EOA admin
+- treasury with EOA owner
+- vault holding user deposits with strong admin
+
+LOW:
+- treasury with timelock/governor/multisig owner (even if upgradeable and can transfer funds — that is governance, not a retail rug)
+- router / factory / multicall / wrapper with no trap signals
+- plain ERC-20 without theft mechanics
+
+Do NOT mark a governed treasury MEDIUM just because transfer/batchTransfer/upgrade exist.
+Do NOT say users must "approve this router" for a native treasury claimWithdrawal path.
+Do NOT call routers "scam tokens."
+
+════════════════════════════════════════
+STEP 4 — USER REPORT (after STRUCTURED block)
+════════════════════════════════════════
+## REPORT
 
 ## 📋 Summary
-Name (symbol + full name if known) and purpose in 1–2 sentences. Include max supply / decimals if in code.
+1–2 sentences: type + purpose. Name/symbol only if in code or verified identity context.
 
 ## ⚙️ Key Functions
-One line for standard ERC-20 helpers, then unique or owner-only functions with short plain-English descriptions.
+Real function names from source with plain-English one-liners.
 
 ## 🔐 Ownership & Controls
-Who the contract owner is in code terms and what they can do. If controls are standard launch controls, say so. One short paragraph.
-If this is only a token contract, explicitly note it is not the protocol DAO treasury unless the code shows otherwise.
+Who can mutate what. For treasury: state Timelock/Governor clearly if present.
+
+## 🔎 Checklist Findings
+3–6 bullets tied to THIS code (upgradeable, mint, pause, fees, owner kind, external calls, type).
 
 ## ✅ What This Does Well
-2–3 concrete positives from the code.
+2–3 positives from code.
 
 ## ℹ️ Things to Know
-3–4 neutral facts (not scare warnings). Example: "Total supply is fixed at 10 billion."
+3–4 neutral facts. Type-correct only (no router-approve language on treasuries).
 
 ## 🛡️ Risk Rating
-State exactly one of: LOW RISK, MEDIUM RISK, or HIGH RISK
-Then one confident sentence. For LOW RISK end with "No major red flags for a standard token contract."
+Exactly one of: LOW RISK, MEDIUM RISK, or HIGH RISK
+One sentence matching the type-aware rubric.
 
 ---
-*AI-assisted analysis, not financial advice. Not a substitute for a professional audit.*`;
+*AI-assisted analysis, not financial advice. Not a substitute for a professional audit.*
+
+CRITICAL OUTPUT RULES:
+- Your reply must contain ONLY the ## STRUCTURED json fence, then the ## REPORT sections above.
+- Do NOT restate STEP 1/2/3/4, do NOT say "I'll guide you", do NOT explain the prompt.
+- Do NOT analyze non-Solidity (Python/JS deploy scripts). If input is not a contract, reply with one line: NOT_A_CONTRACT.`;
 
 async function analyzeContract() {
   const code = getCode();
   const errEl = document.getElementById('analyzeError');
   errEl.style.display = 'none';
+  const isPaste = (currentTab === 'paste');
+
+  // Always hide recognized-brand card until we know this analysis has a matching address
+  if (isPaste) showKnownBrand(null);
 
   if (!code) {
     if (currentTab === 'address') {
@@ -1202,6 +1659,17 @@ async function analyzeContract() {
     return;
   }
 
+  // Paste tab: only Solidity. Never carry over a previous address "recognized" card.
+  if (isPaste) {
+    if (!looksLikeSolidity(code)) {
+      errEl.textContent = 'Paste Solidity source (pragma solidity / contract Name { … }). App JS/HTML/Python is not a contract.';
+      errEl.style.display = 'block';
+      showKnownBrand(null);
+      setRiskBadge(null);
+      return;
+    }
+  }
+
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Analyzing...';
@@ -1211,22 +1679,41 @@ async function analyzeContract() {
   resultCard.classList.add('visible');
   output.innerHTML = '<span class="cursor"></span>';
   setRiskBadge(null);
+  if (isPaste) showKnownBrand(null);
 
   // Truncate very large contracts to avoid overwhelming the model
   const codeToSend = code.length > 12000 ? code.slice(0, 12000) + '\n\n// [contract truncated for analysis]' : code;
-  let known = lastKnownContract;
-  if (!known && lastFetchedAddress) {
-    known = await fetchKnownMeta(lastFetchedAddress);
-    lastKnownContract = known;
+
+  // Identity ONLY for address-lookup of THIS analysis — never paste, never leftover
+  let known = null;
+  let analysisAddress = '';
+  let analysisChain = '';
+  if (!isPaste && currentTab === 'address') {
+    known = lastKnownContract;
+    analysisAddress = lastFetchedAddress || '';
+    analysisChain = lastFetchedChain || '';
+    if (!known && analysisAddress) {
+      known = await fetchKnownMeta(analysisAddress);
+      lastKnownContract = known;
+    }
+  } else {
+    known = null;
+    analysisAddress = '';
+    analysisChain = '';
+    showKnownBrand(null);
   }
+
   let prompt = SYSTEM_PROMPT;
   if (known && known.blurb) {
-    prompt += '\n\nVERIFIED CONTEXT (trust this over speculation):\n' + known.blurb +
-      '\nSuggested risk if code matches a standard token: ' + (known.risk_hint || 'LOW') + ' RISK.';
+    prompt += '\n\nVERIFIED CONTEXT — IDENTITY ONLY (logos/names). Do NOT set risk from this. Risk = STRUCTURED signals + type rubric only:\n'
+      + known.blurb
+      + (known.name ? '\nKnown name: ' + known.name : '')
+      + (known.symbol ? '\nSymbol: ' + known.symbol : '')
+      + (known.kind ? '\nKind hint (identity): ' + known.kind : '');
   }
-  if (lastFetchedAddress) {
-    prompt += '\n\nContract address: ' + lastFetchedAddress +
-      (lastFetchedChain ? ' on ' + lastFetchedChain : '');
+  if (analysisAddress) {
+    prompt += '\n\nContract address: ' + analysisAddress +
+      (analysisChain ? ' on ' + analysisChain : '');
   }
   prompt += '\n\nContract to analyze:\n\n' + codeToSend;
 
@@ -1236,7 +1723,10 @@ async function analyzeContract() {
     const data = await analyzeAsync(prompt, (msg) => {
       btn.textContent = '⏳ ' + msg;
     });
-    fullText = (data.response || '').trim();
+    const rawOut = (data.response || '').trim();
+    const processed = processAnalysisOutput(rawOut, known);
+    lastAnalysisMeta = processed;
+    fullText = processed.report;
     document.getElementById('copyBtn').style.display = 'none';
     document.getElementById('shareBtn').style.display = 'none';
 
@@ -1254,18 +1744,26 @@ async function analyzeContract() {
     }
 
     output.innerHTML = formatOutput(fullText);
-    setRiskBadge(resolveRisk(fullText, known));
+    setRiskBadge(processed.risk);
     document.getElementById('copyBtn').style.display = 'inline-block';
     document.getElementById('shareBtn').style.display = 'inline-block';
-    if (currentTab === 'address' && lastFetchedAddress) {
-      loadTransactions(lastFetchedAddress, lastFetchedChain || 'eth');
+    if (!isPaste && currentTab === 'address' && analysisAddress) {
+      loadTransactions(analysisAddress, analysisChain || 'eth');
     }
-    showKnownBrand(known);
+    // Only show recognized brand when THIS analysis was address-lookup with known meta
+    if (!isPaste && currentTab === 'address' && known && known.logo) {
+      showKnownBrand(known);
+    } else {
+      showKnownBrand(null);
+    }
 
   } catch (err) {
     output.innerHTML = '';
     const msg = (err && err.message) ? err.message : String(err);
-    if (msg.includes('AIVM') || msg.includes('LIGHTCHAIN_PRIVATE_KEY')) {
+    const low = msg.toLowerCase();
+    if (low.includes('underpriced') || low.includes('replacement transaction') || low.includes('nonce')) {
+      errEl.textContent = 'Network was busy submitting the AIVM job (gas/nonce). Please wait a few seconds and tap Explain again.';
+    } else if (msg.includes('AIVM') || msg.includes('LIGHTCHAIN_PRIVATE_KEY')) {
       errEl.textContent = 'Lightchain AIVM is unavailable right now. Please try again in a moment.';
     } else if (msg.includes('fetch') || msg.includes('Failed')) {
       errEl.textContent = 'Cannot reach the explainer server. Please try again shortly.';
@@ -1283,6 +1781,12 @@ async function analyzeContract() {
 function updateFreeCounter() {
   const el = document.getElementById('freeCounter');
   if (!el) return;
+  if (FREE_FOREVER) {
+    el.textContent = 'Free · unlimited testing';
+    el.className = 'free-counter ok';
+    el.style.color = '#6ee7b7';
+    return;
+  }
   if (userHasPaidAccess && accessExpiryDate) {
     const exp = accessExpiryDate.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
     el.textContent = '✓ Access until ' + exp;
@@ -1325,10 +1829,12 @@ function handleAnalyzeClick() {
 
 // ── Access gate helpers ────────────────────────────────────
 function canRunAnalysis() {
+  if (FREE_FOREVER) return true;
   return freeAnalysesUsed < FREE_ANALYSES_LIMIT || userHasPaidAccess;
 }
 
 function recordAnalysisUsed() {
+  if (FREE_FOREVER) return;
   if (isExample) { isExample = false; return; }
   if (freeAnalysesUsed < FREE_ANALYSES_LIMIT) {
     freeAnalysesUsed++;

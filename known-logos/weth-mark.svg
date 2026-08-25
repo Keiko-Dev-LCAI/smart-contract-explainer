@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Wrapped Ether">
+  <rect width="256" height="256" rx="56" fill="#14141A"/>
+  <path d="M128 28 L68 128 l60 36 60-36z" fill="#8C8C8C"/>
+  <path d="M68 140 l60 88 60-88 -60 36z" fill="#3C3C3D"/>
+  <path d="M128 28 l0 92 60-36z" fill="#C0C0C0"/>
+  <path d="M128 164 l0 64 60-88z" fill="#8C8C8C"/>
+  <path d="M68 128 l60 36 0-92z" fill="#626262"/>
+</svg>
