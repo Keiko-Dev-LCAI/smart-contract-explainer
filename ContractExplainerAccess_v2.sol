@@ -59,7 +59,7 @@ contract ContractExplainerAccess {
 
     /**
      * @dev Sets deployer as owner, minPrice to 10 LCAI.
-     *      Deploy from Keiko's wallet: 0xA3a653a8cBA0710ff57Ac34E2278C603B4259FD3
+     *      Deployer becomes owner; transfer ownership after deploy if needed.
      */
     constructor() {
         owner    = msg.sender;

@@ -938,7 +938,6 @@ const LIGHTCHAIN_EXPLORER     = 'https://mainnet.lightscan.app';
 const FREE_FOREVER = false;
 const FREE_ANALYSES_LIMIT = FREE_FOREVER ? 999999 : 5;
 const TARGET_USD_PRICE = 1;   // $1 USD for 30 days — LCAI amount calculated live
-const OWNER_ADDRESS = '0xa3a653a8cba0710ff57ac34e2278c603b4259fd3'; // owner override
 const ACCESS_CONTRACT_ABI = [
   { name: 'purchaseAccess', type: 'function', stateMutability: 'payable', inputs: [], outputs: [] },
   { name: 'hasAccess', type: 'function', stateMutability: 'view', inputs: [{ name: 'wallet', type: 'address' }], outputs: [{ name: '', type: 'bool' }] },
@@ -1889,12 +1888,6 @@ async function refreshAccessStatus() {
     return;
   }
   if (!currentWalletAddress) return;
-  // Owner always has free access
-  if (currentWalletAddress.toLowerCase() === OWNER_ADDRESS) {
-    userHasPaidAccess = true;
-    accessExpiryDate = new Date('2099-12-31');
-    return;
-  }
   try {
     const iface = new ethers.Interface(ACCESS_CONTRACT_ABI);
     const hasAccessData = iface.encodeFunctionData('hasAccess', [currentWalletAddress]);

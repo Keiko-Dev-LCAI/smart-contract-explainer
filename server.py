@@ -39,7 +39,9 @@ STATIC_DIR = os.environ.get('SCE_STATIC_DIR') or (
 # AIVM_ONLY=1 (default): no Ollama fallback in production
 AIVM_ONLY = os.environ.get('AIVM_ONLY', '1').strip() not in ('0', 'false', 'False', 'no')
 
-ETHERSCAN_KEY = os.environ.get("ETHERSCAN_KEY", "V2TNJIG3PY8K6R2WDHAQ3RHIYV3DM7K3JD")
+ETHERSCAN_KEY = os.environ.get("ETHERSCAN_KEY", "").strip()
+if not ETHERSCAN_KEY:
+    sys.exit("ERROR: ETHERSCAN_KEY environment variable is required. Set it in the Railway dashboard.")
 
 # Etherscan V2 uses one endpoint with chainid param
 ETHERSCAN_V2 = 'https://api.etherscan.io/v2/api'
