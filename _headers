@@ -1,0 +1,11 @@
+/contract-explainer.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/getlcai/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/known-logos/*
+  Cache-Control: public, max-age=3600
+
+/*
+  Cache-Control: public, max-age=300
